@@ -1,4 +1,4 @@
-const STORAGE_KEY = "morningBriefApiKey";
+const WORKER_BASE_URL = "https://morning-brief-news-proxy.socceratsuo.workers.dev";
 
 const CATEGORIES = [
   {
@@ -45,29 +45,13 @@ const CATEGORIES = [
   },
 ];
 
-const apiKeySection = document.getElementById("api-key-section");
-const apiKeyInput = document.getElementById("api-key-input");
-const saveKeyBtn = document.getElementById("save-key-btn");
-const changeKeyBtn = document.getElementById("change-key-btn");
 const refreshBtn = document.getElementById("refresh-btn");
 const feed = document.getElementById("feed");
 
-function getStoredApiKey() {
-  return localStorage.getItem(STORAGE_KEY) || "";
-}
-
-function showApiKeySection() {
-  apiKeyInput.value = getStoredApiKey();
-  apiKeySection.hidden = false;
-}
-
-function hideApiKeySection() {
-  apiKeySection.hidden = true;
-}
-
-function buildUrl(category, apiKey) {
-  const url = new URL(`https://newsapi.org/v2/${category.endpoint}`);
-  const params = { ...category.params, pageSize: "5", apiKey };
+function buildUrl(category) {
+  const url = new URL(WORKER_BASE_URL);
+  url.searchParams.set("endpoint", category.endpoint);
+  const params = { ...category.params, pageSize: "5" };
   Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
   return url.toString();
 }
@@ -95,7 +79,7 @@ function createCategorySection(category) {
 
   const status = document.createElement("p");
   status.className = "category-status";
-  status.textContent = "APIキーを入力すると表示されます";
+  status.textContent = "読み込み中...";
   section.appendChild(status);
 
   const list = document.createElement("ul");
@@ -157,7 +141,7 @@ function renderArticles(list, articles) {
   });
 }
 
-async function loadCategory(category, apiKey, refs) {
+async function loadCategory(category, refs) {
   const { status, list } = refs;
   status.hidden = false;
   status.classList.remove("error");
@@ -165,7 +149,7 @@ async function loadCategory(category, apiKey, refs) {
   list.hidden = true;
 
   try {
-    const response = await fetch(buildUrl(category, apiKey));
+    const response = await fetch(buildUrl(category));
     const data = await response.json();
 
     if (!response.ok || data.status !== "ok") {
@@ -187,16 +171,10 @@ async function loadCategory(category, apiKey, refs) {
 }
 
 function fetchAll() {
-  const apiKey = getStoredApiKey();
-  if (!apiKey) {
-    showApiKeySection();
-    return;
-  }
-
   refreshBtn.disabled = true;
   const loads = CATEGORIES.map((category) => {
     const refs = categoryRefs[category.id];
-    return loadCategory(category, apiKey, refs);
+    return loadCategory(category, refs);
   });
 
   Promise.allSettled(loads).finally(() => {
@@ -215,27 +193,9 @@ function buildFeed() {
   });
 }
 
-saveKeyBtn.addEventListener("click", () => {
-  const key = apiKeyInput.value.trim();
-  if (!key) return;
-  localStorage.setItem(STORAGE_KEY, key);
-  hideApiKeySection();
-  fetchAll();
-});
-
-changeKeyBtn.addEventListener("click", () => {
-  showApiKeySection();
-});
-
 refreshBtn.addEventListener("click", () => {
   fetchAll();
 });
 
 buildFeed();
-
-if (getStoredApiKey()) {
-  hideApiKeySection();
-  fetchAll();
-} else {
-  showApiKeySection();
-}
+fetchAll();
