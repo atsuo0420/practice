@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIデイリーロガー</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 AIデイリーロガー</h1>
+      <p class="subtitle">今日やったことを自由に書くと、Notion用に整理します</p>
+    </header>
+
+    <section class="input-section">
+      <label for="log-date">日付</label>
+      <input type="date" id="log-date">
+
+      <label for="input-text">今日やったこと（自由入力）</label>
+      <textarea id="input-text" rows="8" placeholder="例）&#10;今日は認証機能を実装した。&#10;途中でエラーが出て苦戦した。&#10;JWTの仕組みについて学んだ。&#10;次回はテストコードを書く。"></textarea>
+      <button id="organize-btn">整理する</button>
+    </section>
+
+    <section class="output-section">
+      <label for="output-text">Notion用に整形された結果</label>
+      <textarea id="output-text" rows="12" readonly placeholder="ここに整理結果が表示されます"></textarea>
+      <button id="copy-btn">コピー</button>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
