@@ -106,18 +106,38 @@ function createCategorySection(category) {
   return { section, status, list };
 }
 
+async function translateToJapanese(text) {
+  if (!text) return text;
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=${encodeURIComponent(text)}`;
+    const response = await fetch(url);
+    if (!response.ok) return text;
+    const data = await response.json();
+    return data[0].map((segment) => segment[0]).join("");
+  } catch (error) {
+    return text;
+  }
+}
+
 function renderArticles(list, articles) {
   list.innerHTML = "";
   articles.forEach((article) => {
     const item = document.createElement("li");
     item.className = "article";
 
+    const originalTitle = article.title || "(タイトルなし)";
+
     const link = document.createElement("a");
     link.href = article.url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.textContent = article.title || "(タイトルなし)";
+    link.textContent = originalTitle;
     item.appendChild(link);
+
+    const originalMeta = document.createElement("p");
+    originalMeta.className = "article-original-title";
+    originalMeta.hidden = true;
+    item.appendChild(originalMeta);
 
     const meta = document.createElement("p");
     meta.className = "article-meta";
@@ -126,6 +146,14 @@ function renderArticles(list, articles) {
     item.appendChild(meta);
 
     list.appendChild(item);
+
+    translateToJapanese(originalTitle).then((translated) => {
+      if (translated && translated.trim() && translated.trim() !== originalTitle.trim()) {
+        link.textContent = translated;
+        originalMeta.textContent = originalTitle;
+        originalMeta.hidden = false;
+      }
+    });
   });
 }
 
