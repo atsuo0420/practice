@@ -77,6 +77,11 @@ function createCategorySection(category) {
   title.textContent = `${category.emoji} ${category.title}`;
   section.appendChild(title);
 
+  const summary = document.createElement("p");
+  summary.className = "category-summary";
+  summary.hidden = true;
+  section.appendChild(summary);
+
   const status = document.createElement("p");
   status.className = "category-status";
   status.textContent = "読み込み中...";
@@ -87,7 +92,7 @@ function createCategorySection(category) {
   list.hidden = true;
   section.appendChild(list);
 
-  return { section, status, list };
+  return { section, summary, status, list };
 }
 
 async function translateToJapanese(text) {
@@ -141,12 +146,45 @@ function renderArticles(list, articles) {
   });
 }
 
+async function summarizeCategory(articles, summaryEl) {
+  summaryEl.hidden = false;
+  summaryEl.classList.remove("error");
+  summaryEl.textContent = "📝 要約を作成中...";
+
+  try {
+    const url = new URL(WORKER_BASE_URL);
+    url.searchParams.set("endpoint", "summarize");
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        articles: articles.map((article) => ({
+          title: article.title,
+          description: article.description,
+        })),
+      }),
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.summary) {
+      summaryEl.hidden = true;
+      return;
+    }
+
+    summaryEl.textContent = `📝 ${data.summary}`;
+  } catch (error) {
+    summaryEl.hidden = true;
+  }
+}
+
 async function loadCategory(category, refs) {
-  const { status, list } = refs;
+  const { summary, status, list } = refs;
   status.hidden = false;
   status.classList.remove("error");
   status.textContent = "読み込み中...";
   list.hidden = true;
+  summary.hidden = true;
 
   try {
     const response = await fetch(buildUrl(category));
@@ -164,6 +202,7 @@ async function loadCategory(category, refs) {
     renderArticles(list, data.articles);
     status.hidden = true;
     list.hidden = false;
+    summarizeCategory(data.articles, summary);
   } catch (error) {
     status.classList.add("error");
     status.textContent = `取得失敗: ${error.message}`;

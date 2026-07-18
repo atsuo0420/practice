@@ -123,6 +123,21 @@ button:disabled {
   color: #888;
 }
 
+.category-summary {
+  background: #f0f4ff;
+  border-left: 3px solid #4a6cf7;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+}
+
+.category-summary.error {
+  display: none;
+}
+
 .category-status {
   font-size: 13px;
   color: #888;
