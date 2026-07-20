@@ -148,6 +148,19 @@ button:disabled {
   color: #d24545;
 }
 
+.retry-btn {
+  display: block;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: normal;
+  background: #d24545;
+  margin-top: 4px;
+}
+
+.retry-btn:hover {
+  background: #b23636;
+}
+
 .empty-state {
   text-align: center;
   color: #888;

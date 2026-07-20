@@ -1,4 +1,6 @@
 const WORKER_BASE_URL = "https://morning-brief-news-proxy.socceratsuo.workers.dev";
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
 
 const CATEGORIES = [
   {
@@ -48,6 +50,10 @@ const CATEGORIES = [
 const refreshBtn = document.getElementById("refresh-btn");
 const feed = document.getElementById("feed");
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function buildUrl(category) {
   const url = new URL(WORKER_BASE_URL);
   url.searchParams.set("endpoint", category.endpoint);
@@ -92,29 +98,56 @@ function createCategorySection(category) {
   list.hidden = true;
   section.appendChild(list);
 
-  return { section, summary, status, list };
+  const retryBtn = document.createElement("button");
+  retryBtn.className = "retry-btn";
+  retryBtn.textContent = "再試行";
+  retryBtn.hidden = true;
+  section.appendChild(retryBtn);
+
+  const refs = { section, summary, status, list, retryBtn };
+  retryBtn.addEventListener("click", () => {
+    loadCategory(category, refs);
+  });
+
+  return refs;
 }
 
-async function translateToJapanese(text) {
-  if (!text) return text;
+async function translateBatch(titles) {
+  if (titles.length === 0) return titles;
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=${encodeURIComponent(text)}`;
-    const response = await fetch(url);
-    if (!response.ok) return text;
+    const url = new URL(WORKER_BASE_URL);
+    url.searchParams.set("endpoint", "translate");
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ titles }),
+    });
     const data = await response.json();
-    return data[0].map((segment) => segment[0]).join("");
+
+    if (!response.ok || !Array.isArray(data.translations) || data.translations.length !== titles.length) {
+      return titles.map(() => "");
+    }
+
+    return data.translations;
   } catch (error) {
-    return text;
+    return titles.map(() => "");
   }
 }
 
 function renderArticles(list, articles) {
   list.innerHTML = "";
+
+  const links = [];
+  const originalMetas = [];
+  const originalTitles = [];
+
   articles.forEach((article) => {
     const item = document.createElement("li");
     item.className = "article";
 
     const originalTitle = article.title || "(タイトルなし)";
+    originalTitles.push(originalTitle);
 
     const link = document.createElement("a");
     link.href = article.url;
@@ -122,11 +155,13 @@ function renderArticles(list, articles) {
     link.rel = "noopener noreferrer";
     link.textContent = originalTitle;
     item.appendChild(link);
+    links.push(link);
 
     const originalMeta = document.createElement("p");
     originalMeta.className = "article-original-title";
     originalMeta.hidden = true;
     item.appendChild(originalMeta);
+    originalMetas.push(originalMeta);
 
     const meta = document.createElement("p");
     meta.className = "article-meta";
@@ -135,12 +170,15 @@ function renderArticles(list, articles) {
     item.appendChild(meta);
 
     list.appendChild(item);
+  });
 
-    translateToJapanese(originalTitle).then((translated) => {
+  translateBatch(originalTitles).then((translations) => {
+    translations.forEach((translated, index) => {
+      const originalTitle = originalTitles[index];
       if (translated && translated.trim() && translated.trim() !== originalTitle.trim()) {
-        link.textContent = translated;
-        originalMeta.textContent = originalTitle;
-        originalMeta.hidden = false;
+        links[index].textContent = translated.trim();
+        originalMetas[index].textContent = originalTitle;
+        originalMetas[index].hidden = false;
       }
     });
   });
@@ -178,35 +216,53 @@ async function summarizeCategory(articles, summaryEl) {
   }
 }
 
+async function fetchCategoryArticles(category) {
+  const response = await fetch(buildUrl(category));
+  const data = await response.json();
+
+  if (!response.ok || data.status !== "ok") {
+    throw new Error(data.message || `HTTPエラー: ${response.status}`);
+  }
+
+  return data.articles || [];
+}
+
 async function loadCategory(category, refs) {
-  const { summary, status, list } = refs;
+  const { summary, status, list, retryBtn } = refs;
   status.hidden = false;
   status.classList.remove("error");
   status.textContent = "読み込み中...";
   list.hidden = true;
   summary.hidden = true;
+  retryBtn.hidden = true;
 
-  try {
-    const response = await fetch(buildUrl(category));
-    const data = await response.json();
+  let lastError;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const articles = await fetchCategoryArticles(category);
 
-    if (!response.ok || data.status !== "ok") {
-      throw new Error(data.message || `HTTPエラー: ${response.status}`);
-    }
+      if (articles.length === 0) {
+        status.textContent = "記事が見つかりませんでした";
+        return;
+      }
 
-    if (!data.articles || data.articles.length === 0) {
-      status.textContent = "記事が見つかりませんでした";
+      renderArticles(list, articles);
+      status.hidden = true;
+      list.hidden = false;
+      summarizeCategory(articles, summary);
       return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES) {
+        status.textContent = `取得失敗、再試行中... (${attempt + 1}/${MAX_RETRIES})`;
+        await sleep(RETRY_DELAY_MS);
+      }
     }
-
-    renderArticles(list, data.articles);
-    status.hidden = true;
-    list.hidden = false;
-    summarizeCategory(data.articles, summary);
-  } catch (error) {
-    status.classList.add("error");
-    status.textContent = `取得失敗: ${error.message}`;
   }
+
+  status.classList.add("error");
+  status.textContent = `取得失敗: ${lastError.message}`;
+  retryBtn.hidden = false;
 }
 
 function fetchAll() {
